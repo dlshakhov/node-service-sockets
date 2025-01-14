@@ -1,0 +1,49 @@
+image: node:16
+definitions:
+  steps:
+    - step: &build
+        name: Build
+        artifacts:
+          - artifacts/application.zip
+        script:
+          - npm install
+          - apt-get update && apt-get install -y zip
+          - test -f artifacts && rm -rf artifacts
+          - mkdir artifacts
+          - zip -r artifacts/application.zip * .[^.]* -x *.yml '*artifacts*' '*.git*'
+    - step: &deploy
+          name: Deploy
+          oidc: true
+          script:
+          - pipe: atlassian/aws-elasticbeanstalk-deploy:1.0.2
+            variables:
+              AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+              AWS_OIDC_ROLE_ARN: $AWS_OIDC_ROLE_ARN
+              APPLICATION_NAME: $APPLICATION_NAME
+              ENVIRONMENT_NAME: $ENVIRONMENT_NAME
+              ZIP_FILE: "artifacts/application.zip"
+              S3_BUCKET: $S3_BUCKET
+              WAIT: "true"
+pipelines:
+  default:
+    - step: *build
+    # - step: *test
+
+  branches:
+    develop:
+    - step: *build
+    - step:
+        <<: *deploy
+        deployment: development
+
+    test:
+    - step: *build
+    - step:
+        <<: *deploy
+        deployment: test
+
+    master:
+     - step: *build
+     - step:
+         <<: *deploy
+         deployment: production
